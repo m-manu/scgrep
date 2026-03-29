@@ -1,0 +1,18 @@
+{
+  "venv": [
+    "requirements.txt"
+  ],
+  "node_modules": [
+    "package.json"
+  ],
+  "vendor": [
+    "go.mod",
+    "Gopkg.toml"
+  ],
+  "target": [
+    "pom.xml"
+  ],
+  "build": [
+    "build.gradle"
+  ]
+}

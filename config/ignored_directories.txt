@@ -1,0 +1,10 @@
+.git
+.gradle
+.hg
+.idea
+.svn
+.vscode
+.gem
+.m2
+.mono
+.docker
