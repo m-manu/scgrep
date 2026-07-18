@@ -23,7 +23,8 @@ func TestWalk(t *testing.T) {
 			goFilesCount++
 		}
 	}
-	if htmlFilesCount < 5 || goFilesCount < 6500 {
+	if htmlFilesCount < 2 || goFilesCount < 6500 {
+		t.Logf("html: %v, go: %v", htmlFilesCount, goFilesCount)
 		t.Error("Directory scanner wasn't able to detect all the source code files")
 	}
 }

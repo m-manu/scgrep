@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 )
@@ -41,4 +42,33 @@ func scanDirectory(dir string, emit func(string)) error {
 		return nil
 	}
 	return filepath.WalkDir(dir, walkFn)
+}
+
+func scanDirectoryGit(dir string, emit func(string)) error {
+	cmd := exec.Command("git", "ls-files", "-z", "--cached", "--others", "--exclude-standard")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return err
+	}
+
+	files := strings.Split(string(out), "\x00")
+	for _, file := range files {
+		if file == "" {
+			continue
+		}
+
+		baseName := filepath.Base(file)
+
+		// Ignore dot files (Mac)
+		if strings.HasPrefix(baseName, "._") {
+			continue
+		}
+
+		// Emit source code files
+		if allowedFileExtensions.contains(getFileExt(baseName)) || allowedFileNames.contains(baseName) {
+			emit(filepath.Join(dir, file))
+		}
+	}
+	return nil
 }

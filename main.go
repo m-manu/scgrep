@@ -3,8 +3,10 @@ package main
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 const defaultGrepCommand = "grep"
@@ -58,36 +60,88 @@ func main() {
 		showErrorMessageAndExit("error: at least 2 arguments required (PATTERN and DIRECTORY_PATH)", exitCodeInvalidNumArgs)
 	}
 
-	// Last argument is the directory path, everything else goes to grep
-	dirPath := args[len(args)-1]
-	grepArgs := args[:len(args)-1] // includes flags + pattern
+	var grepArgs []string
+	var positionals []string
+	skipNext := false
+
+	for _, arg := range args {
+		if strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "--") && strings.Contains(arg, "r") {
+			showErrorMessageAndExit("error: all searches are recursive by default; do not pass '-r' flag", exitCodeInvalidNumArgs)
+		}
+
+		if skipNext {
+			grepArgs = append(grepArgs, arg)
+			skipNext = false
+			continue
+		}
+
+		if strings.HasPrefix(arg, "-") {
+			grepArgs = append(grepArgs, arg)
+			if arg == "-A" || arg == "-B" || arg == "-C" || arg == "-m" || arg == "-f" || arg == "--context" || arg == "--max-count" || arg == "--file" {
+				skipNext = true
+			}
+		} else {
+			positionals = append(positionals, arg)
+		}
+	}
+
+	if len(positionals) > 2 {
+		showErrorMessageAndExit("error: completely invalid format. exactly 1 pattern and 1 directory expected", exitCodeInvalidNumArgs)
+	} else if len(positionals) < 2 {
+		showErrorMessageAndExit("error: at least 2 non-flag arguments required (PATTERN and DIRECTORY_PATH)", exitCodeInvalidNumArgs)
+	}
+
+	dirPath := positionals[1]
+	// the pattern goes to grep along with its flags
+	grepArgs = append(grepArgs, positionals[0])
 
 	// Resolve symlinks
-	resolvedPath, err := filepath.EvalSymlinks(dirPath)
-	if err != nil {
-		showErrorMessageAndExit(fmt.Sprintf("error: unable to resolve path \"%s\": %v", dirPath, err), exitCodeSymLinkEvalFailed)
+	resolvedPath, errSL := filepath.EvalSymlinks(dirPath)
+	if errSL != nil {
+		showErrorMessageAndExit(fmt.Sprintf("error: unable to resolve path \"%s\": %v", dirPath, errSL), exitCodeSymLinkEvalFailed)
 	}
 
 	// Validate directory
-	if err := checkDirectoryIsReadable(resolvedPath); err != nil {
-		showErrorMessageAndExit(fmt.Sprintf("error: \"%s\" is not a readable directory: %v", dirPath, err), exitCodeInputDirectoryNotReadable)
+	if errVD := checkDirectoryIsReadable(resolvedPath); errVD != nil {
+		showErrorMessageAndExit(fmt.Sprintf("error: \"%s\" is not a readable directory: %v", dirPath, errVD), exitCodeInputDirectoryNotReadable)
 	}
 
 	// Find grep command
-	grepCmd, err := findGrepCommand()
-	if err != nil {
-		showErrorMessageAndExit(fmt.Sprintf("error: %v", err), exitCodeInvalidExecutable)
+	grepCmd, errGrep := findGrepCommand()
+	if errGrep != nil {
+		showErrorMessageAndExit(fmt.Sprintf("error: %v", errGrep), exitCodeInvalidExecutable)
 	}
 
 	// Create channel for file paths
 	pathsChan := make(chan string, defaultBatchSize*getParallelism())
 
+	isGitAvailable := false
+	if _, errLP := exec.LookPath("git"); errLP == nil {
+		isGitAvailable = true
+	}
+
+	isGitRepo := false
+	if isGitAvailable {
+		cmd := exec.Command("git", "rev-parse", "--is-inside-work-tree")
+		cmd.Dir = resolvedPath
+		if errC := cmd.Run(); errC == nil {
+			isGitRepo = true
+		}
+	}
+
 	// Start scanner in a goroutine — this is the "main thread" scanner per spec
 	scanDone := make(chan error, 1)
 	go func() {
-		scanErr := scanDirectory(resolvedPath, func(path string) {
-			pathsChan <- path
-		})
+		var scanErr error
+		if isGitRepo {
+			scanErr = scanDirectoryGit(resolvedPath, func(path string) {
+				pathsChan <- path
+			})
+		} else {
+			scanErr = scanDirectory(resolvedPath, func(path string) {
+				pathsChan <- path
+			})
+		}
 		close(pathsChan)
 		scanDone <- scanErr
 	}()

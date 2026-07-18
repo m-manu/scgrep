@@ -42,9 +42,13 @@ func showErrorMessageAndExit(msg string, exitCode int) {
 
 // findGrepCommand locates the grep executable on the system.
 func findGrepCommand() (string, error) {
-	path, err := exec.LookPath(defaultGrepCommand)
+	grepCmd := defaultGrepCommand
+	if envCmd := os.Getenv("GREP_CMD"); envCmd != "" {
+		grepCmd = envCmd
+	}
+	path, err := exec.LookPath(grepCmd)
 	if err != nil {
-		return "", fmt.Errorf("grep command not found: %w", err)
+		return "", fmt.Errorf("grep command '%s' not found: %w", grepCmd, err)
 	}
 	return path, nil
 }
