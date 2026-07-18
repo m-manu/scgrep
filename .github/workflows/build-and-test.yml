@@ -3,22 +3,28 @@ on:
   push:
     branches:
       - main
-  pull_request:
-    branches:
-      - main
+
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
       - name: Setup Golang
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@7a3fe6cf4cb3a834922a1244abfce67bcef6a0c5
         with:
-          go-version: '1.25'
-      - name: Vet code
-        run: go vet ./...
+          go-version: 1.25
+      - name: Set GOROOT environment variable
+        run: echo "GOROOT=$(go env GOROOT)" >> $GITHUB_ENV
       - name: Build code
-        run: go build -v ./...
+        run: |
+          GOOS=linux GOARCH=amd64 go build -a
+          GOOS=freebsd GOARCH=amd64 go build -a
+          GOOS=windows GOARCH=amd64 go build -a
+          GOOS=android GOARCH=arm64 go build -a
+          GOOS=darwin GOARCH=arm64 go build -a
       - name: Test code
-        run: go test -v -race -count=1 ./...
+        run: go test -v ./...

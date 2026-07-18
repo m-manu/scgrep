@@ -13,6 +13,7 @@
     "pom.xml"
   ],
   "build": [
-    "build.gradle"
+    "build.gradle",
+    "build.gradle.kts"
   ]
 }

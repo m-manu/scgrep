@@ -90,14 +90,43 @@ func TestRunSearchers(t *testing.T) {
 }
 
 func TestFindGrepCommand(t *testing.T) {
-	path, err := findGrepCommand()
-	if err != nil {
-		t.Skipf("grep not available: %v", err)
-	}
-	if path == "" {
-		t.Error("expected non-empty path for grep")
-	}
-	if !strings.Contains(path, "grep") {
-		t.Errorf("expected path to contain 'grep', got: %s", path)
-	}
+	t.Run("default", func(t *testing.T) {
+		t.Setenv("GREP_CMD", "")
+		path, err := findGrepCommand()
+		if err != nil {
+			t.Skipf("grep not available: %v", err)
+		}
+		if path == "" {
+			t.Error("expected non-empty path for grep")
+		}
+		if !strings.Contains(path, "grep") {
+			t.Errorf("expected path to contain 'grep', got: %s", path)
+		}
+	})
+
+	t.Run("GREP_CMD override missing", func(t *testing.T) {
+		t.Setenv("GREP_CMD", "definitely_not_a_grep_cmd_xyz")
+		_, err := findGrepCommand()
+		if err == nil {
+			t.Fatal("expected error for missing GREP_CMD")
+		}
+		if !strings.Contains(err.Error(), "definitely_not_a_grep_cmd_xyz") {
+			t.Errorf("error should name the command: %v", err)
+		}
+	})
+
+	t.Run("GREP_CMD override valid", func(t *testing.T) {
+		grepPath, err := exec.LookPath("grep")
+		if err != nil {
+			t.Skip("grep not found")
+		}
+		t.Setenv("GREP_CMD", grepPath)
+		path, errFG := findGrepCommand()
+		if errFG != nil {
+			t.Fatal(errFG)
+		}
+		if path != grepPath {
+			t.Errorf("got %s, want %s", path, grepPath)
+		}
+	})
 }

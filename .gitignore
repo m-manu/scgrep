@@ -3,3 +3,4 @@
 scgrep
 *.md
 !README.md
+*.exe
